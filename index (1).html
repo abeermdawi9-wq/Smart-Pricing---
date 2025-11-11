@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Smart Pricing Tool | تسعير المشاريع الصغيرة</title>
+  <meta name="description" content="أداة تجريبية لتسعير المنتجات والخدمات للمشاريع الصغيرة (بدون خادم وبالاعتماد على localStorage)." />
+  <style>
+    :root{
+      --bg:#f6f8fb; --card:#ffffff; --ink:#15202b; --muted:#6b7a86;
+      --teal:#9ccfd3; --teal-600:#6fb6be; --line:#e6eef4; --warn:#b42318; --ok:#127a45;
+    }
+    html,body{height:100%} body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,'Noto Kufi Arabic',Tahoma,Arial;}
+    .wrap{max-width:1100px;margin-inline:auto;padding:18px}
+    header{display:flex;gap:14px;align-items:center;justify-content:space-between;margin-bottom:14px}
+    .brand{display:flex;gap:12px;align-items:center}
+    .brand .logo{width:56px;height:56px;border-radius:12px;background:linear-gradient(145deg,var(--teal),#d4eef0);display:grid;place-items:center;color:#ffffff;font-weight:700;font-size:20px;box-shadow:0 8px 24px rgba(156,207,211,.35)}
+    .brand h1{font-size:18px;margin:0} .brand p{margin:0;color:var(--muted);font-size:12px}
+    .actions{display:flex;gap:8px;flex-wrap:wrap} button,.btn{appearance:none;border:none;background:var(--teal);color:#08333a;font-weight:600;padding:8px 12px;border-radius:10px;cursor:pointer;box-shadow:0 6px 16px rgba(156,207,211,.35)}
+    button:hover{background:var(--teal-600)} .ghost{background:#fff;border:1px solid var(--line);box-shadow:none} .danger{background:#fee2e2;color:#7a1d1d}
+    .grid{display:grid;gap:12px} @media(min-width:980px){.grid.cols-2{grid-template-columns:1fr 1fr}}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px} .card h2{margin:0 0 8px 0;font-size:15px}
+    label{display:block;font-size:13px;color:var(--muted);margin:.2rem 0} input,select,textarea{width:100%;padding:9px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:14px}
+    input[type='number']{text-align:left} table{width:100%;border-collapse:collapse} th,td{border-bottom:1px solid var(--line);padding:8px;text-align:right;font-size:13px} th{color:var(--muted);font-weight:600} tfoot td{font-weight:700}
+    .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px} .kpi{border-radius:14px;border:1px solid var(--line);padding:12px;background:linear-gradient(180deg,#fff,#fbfdff)}
+    .kpi .lbl{color:var(--muted);font-size:12px} .kpi .val{font-size:18px;font-weight:800} .hint{font-size:12px;color:var(--muted)}
+    .right{Text-align:left} .row{display:flex;gap:8px;flex-wrap:wrap} .row>*{flex:1} .badge{display:inline-flex;align-items:center;gap:6px;padding:.25rem .6rem;border-radius:999px;background:#e6f7f8;color:#0d444a;font-weight:600;font-size:12px}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,'Liberation Mono','Courier New',monospace}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <div class="logo" id="logoBox" title="إسقاط شعارك أو حمّله"></div>
+        <div>
+          <h1>Smart Pricing Tool · سِعر بذكاء</h1>
+          <p>تسعير مبسط للمشاريع الصغيرة — بدون خادم، يعمل داخل المتصفح</p>
+          <div class="hint">ارفع شعارك: <input type="file" id="logoInput" accept="image/*" style="inline-size:210px"></div>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="saveScenario">حفظ سيناريو</button>
+        <button class="ghost" id="loadScenario">استرجاع</button>
+        <button class="ghost" id="exportJSON">تصدير JSON</button>
+        <button class="ghost" id="exportCSV">تصدير CSV</button>
+        <button class="danger ghost" id="wipeAll">مسح الكل</button>
+      </div>
+    </header>
+
+    <div class="grid cols-2">
+      <section class="card" id="inputs-basic">
+        <h2>١) بيانات المنتج/الخدمة</h2>
+        <div class="row">
+          <div><label>اسم العنصر</label><input id="itemName" placeholder="مثال: علبة حلويات صغيرة" /></div>
+          <div><label>العملة</label>
+            <select id="currency">
+              <option value="SAR">ريال سعودي (SAR)</option>
+              <option value="USD">دولار (USD)</option>
+              <option value="AED">درهم (AED)</option>
+              <option value="EGP">جنيه (EGP)</option>
+            </select>
+          </div>
+          <div><label>وحدة القياس (اختياري)</label><input id="uom" placeholder="قطعة، ساعة، كجم..." /></div>
+        </div>
+      </section>
+
+      <section class="card" id="inputs-policy">
+        <h2>٢) سياسة التسعير</h2>
+        <div class="row">
+          <div><label>طريقة التسعير</label>
+            <select id="pricingMethod">
+              <option value="costplus">تكلفة + هامش ربح (Cost-Plus)</option>
+              <option value="targetProfit">ربح مستهدف (Target Profit)</option>
+              <option value="backFromMarket">سعر سوقي معكوس (عكسياً من السعر النهائي)</option>
+            </select>
+          </div>
+          <div><label>هامش الربح % (للـ Cost‑Plus)</label><input id="profitMargin" type="number" step="0.1" value="30" /></div>
+          <div><label>الربح المستهدف للقطعة (للـ Target)</label><input id="targetProfit" type="number" step="0.01" value="0" /></div>
+        </div>
+        <div class="row">
+          <div><label>ضريبة/رسوم (VAT)%</label><input id="vat" type="number" step="0.1" value="15" /></div>
+          <div><label>خصم ترويجي % (اختياري)</label><input id="discount" type="number" step="0.1" value="0" /></div>
+          <div><label>سعر السوق النهائي (للـ عكسي)</label><input id="marketPrice" type="number" step="0.01" value="0" /></div>
+        </div>
+        <p class="hint">يمكن تعديل المعاملات لاحقاً وسيتم تحديث النتائج فورًا.</p>
+      </section>
+    </div>
+
+    <section class="card" id="costItems">
+      <div class="row" style="align-items:center;justify-content:space-between">
+        <h2>٣) عناصر التكلفة المباشرة</h2><span class="badge">مواد · عمالة · أخرى</span>
+      </div>
+      <table>
+        <thead><tr><th>الفئة</th><th>الوصف</th><th>الكمية</th><th>تكلفة الوحدة</th><th>الإجمالي</th><th class="right">إجراء</th></tr></thead>
+        <tbody id="itemsBody"></tbody>
+        <tfoot><tr><td colspan="6">
+          <div class="row">
+            <select id="newCat"><option>مواد</option><option>عمالة مباشرة</option><option>أخرى مباشرة</option></select>
+            <input id="newDesc" placeholder="مثال: سكر / علبة كرتون / ساعة عمل" />
+            <input id="newQty" type="number" step="0.01" placeholder="الكمية" />
+            <input id="newUnit" type="number" step="0.01" placeholder="تكلفة الوحدة" />
+            <button id="addItem">إضافة عنصر</button>
+          </div>
+        </td></tr></tfoot>
+      </table>
+      <p class="hint">تُخزّن البيانات محلياً على جهازك.</p>
+    </section>
+
+    <div class="grid cols-2">
+      <section class="card">
+        <h2>٤) التكاليف غير المباشرة (Overhead)</h2>
+        <div class="row">
+          <div><label>ثابت لكل وحدة (ريال/عملة)</label><input id="ohFixedPerUnit" type="number" step="0.01" value="0" /></div>
+          <div><label>نسبة من التكلفة المباشرة %</label><input id="ohRatePct" type="number" step="0.1" value="0" /></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>٥) تحليل نقطة التعادل</h2>
+        <div class="row">
+          <div><label>تكاليف ثابتة إجمالية</label><input id="fixedTotal" type="number" step="0.01" value="0" /></div>
+          <div><label>السعر المتوقع للوحدة (بدون الضريبة)</label><input id="breakevenPrice" type="number" step="0.01" value="0" /></div>
+          <div><label>التكلفة المتغيرة للوحدة</label><input id="variablePerUnit" type="number" step="0.01" value="0" /></div>
+        </div>
+      </section>
+    </div>
+
+    <section class="card" id="results">
+      <h2>٦) النتائج</h2>
+      <div class="kpis" id="kpis"></div>
+      <div class="hint">هذا نموذج تعليمي مبسّط.</div>
+    </section>
+
+    <footer class="wrap" style="padding-inline:0;margin-top:16px;color:var(--muted);font-size:12px">
+      © <span id="yy"></span> Smart Pricing Tool — جميع البيانات تُخزّن محليًا.
+    </footer>
+  </div>
+
+  <script>
+    const $ = (s,r=document)=>r.querySelector(s); const $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
+    const fmt=(n,c)=> new Intl.NumberFormat('ar-SA',{minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(n||0)) + (c?('\u00A0'+c):'');
+    const key='smart_pricing_tool_v1';
+
+    // Default embedded logo (data URI)
+    (function(){
+      const box = document.getElementById('logoBox');
+      box.style.backgroundImage = "url('data:image/png;base64,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')";
+      box.style.backgroundSize = 'cover';
+      box.style.backgroundPosition = 'center';
+      box.textContent = '';
+    })();
+
+    // Logo upload override
+    const logoInput = document.getElementById('logoInput');
+    logoInput.addEventListener('change', e=>{
+      const f = e.target.files?.[0]; if(!f) return;
+      const r = new FileReader();
+      r.onload = ev => { const box = document.getElementById('logoBox'); box.style.backgroundImage = `url(${ev.target.result})`; box.style.backgroundSize='cover'; box.textContent=''; };
+      r.readAsDataURL(f);
+    });
+
+    let state = JSON.parse(localStorage.getItem(key) || '{"items":[]}'); state.items ||= [];
+    const itemsBody=document.getElementById('itemsBody'); const currency=document.getElementById('currency'); const profitMargin=document.getElementById('profitMargin'); const targetProfit=document.getElementById('targetProfit');
+    const pricingMethod=document.getElementById('pricingMethod'); const vat=document.getElementById('vat'); const discount=document.getElementById('discount'); const marketPrice=document.getElementById('marketPrice');
+    const ohFixedPerUnit=document.getElementById('ohFixedPerUnit'); const ohRatePct=document.getElementById('ohRatePct'); const fixedTotal=document.getElementById('fixedTotal'); const breakevenPrice=document.getElementById('breakevenPrice'); const variablePerUnit=document.getElementById('variablePerUnit');
+
+    const itemName=document.getElementById('itemName'); const uom=document.getElementById('uom');
+
+    function persist(){ localStorage.setItem(key, JSON.stringify(state)); }
+    function collect(){ return { items: state.items, currency:currency.value, profitMargin:+profitMargin.value, targetProfit:+targetProfit.value, pricingMethod:pricingMethod.value, vat:+vat.value, discount:+discount.value, marketPrice:+marketPrice.value, ohFixedPerUnit:+ohFixedPerUnit.value, ohRatePct:+ohRatePct.value, fixedTotal:+fixedTotal.value, breakevenPrice:+breakevenPrice.value, variablePerUnit:+variablePerUnit.value, itemName:itemName.value, uom:uom.value }; }
+    function applyState(s){ state.items=s.items||[]; drawItems(); currency.value=s.currency||'SAR'; profitMargin.value=s.profitMargin||30; targetProfit.value=s.targetProfit||0; pricingMethod.value=s.pricingMethod||'costplus'; vat.value=s.vat||15; discount.value=s.discount||0; marketPrice.value=s.marketPrice||0; ohFixedPerUnit.value=s.ohFixedPerUnit||0; ohRatePct.value=s.ohRatePct||0; fixedTotal.value=s.fixedTotal||0; breakevenPrice.value=s.breakevenPrice||0; variablePerUnit.value=s.variablePerUnit||0; itemName.value=s.itemName||''; uom.value=s.uom||''; persist(); calc(); }
+
+    document.getElementById('saveScenario').onclick=()=>{ const sc=JSON.parse(localStorage.getItem(key+':sc')||'{}'); const name=prompt('اسم السيناريو:', state.itemName||'بدون عنوان'); if(!name) return; sc[name]=collect(); localStorage.setItem(key+':sc', JSON.stringify(sc)); alert('تم الحفظ'); };
+    document.getElementById('loadScenario').onclick=()=>{ const sc=JSON.parse(localStorage.getItem(key+':sc')||'{}'); const names=Object.keys(sc); if(!names.length) return alert('لا توجد سيناريوهات'); const name=prompt('اختر/اكتب اسم السيناريو:\n'+names.join('\n')); if(!name||!sc[name]) return; applyState(sc[name]); };
+
+    document.getElementById('exportJSON').onclick=()=>{ const blob=new Blob([JSON.stringify(collect(),null,2)],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='smart-pricing.json'; a.click(); URL.revokeObjectURL(url); };
+    document.getElementById('exportCSV').onclick=()=>{ const rows=[['category','desc','qty','unit','total']]; state.items.forEach(i=> rows.push([i.cat,i.desc,i.qty,i.unit,i.qty*i.unit])); const csv=rows.map(r=> r.map(x=> '"'+String(x).replaceAll('"','""')+'"').join(',')).join('\n'); const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='cost-items.csv'; a.click(); URL.revokeObjectURL(url); };
+    document.getElementById('wipeAll').onclick=()=>{ if(confirm('حذف جميع البيانات المحلية؟')){ localStorage.removeItem(key); localStorage.removeItem(key+':sc'); state={items:[]}; drawItems(); calc(); } };
+
+    // Items
+    const newCat=document.getElementById('newCat'), newDesc=document.getElementById('newDesc'), newQty=document.getElementById('newQty'), newUnit=document.getElementById('newUnit');
+    document.getElementById('addItem').onclick=()=>{ const qty=+newQty.value; const unit=+newUnit.value; if(!(qty>0 && unit>=0)) return alert('أدخل كمية وتكلفة صحيحتين'); state.items.push({id:crypto.randomUUID(),cat:newCat.value,desc:newDesc.value||'-',qty,unit}); newDesc.value=''; newQty.value=''; newUnit.value=''; persist(); drawItems(); calc(); };
+    function delItem(id){ state.items=state.items.filter(i=>i.id!==id); persist(); drawItems(); calc(); }
+    function drawItems(){ itemsBody.innerHTML=''; state.items.forEach(i=>{ const tr=document.createElement('tr'); const total=i.qty*i.unit; tr.innerHTML = '<td>'+i.cat+'</td><td>'+i.desc+'</td><td class="mono">'+fmt(i.qty)+'</td><td class="mono">'+fmt(i.unit)+'</td><td class="mono">'+fmt(total)+'</td><td class="right"><button class="ghost" data-id="'+i.id+'">حذف</button></td>'; itemsBody.appendChild(tr); }); Array.from(document.querySelectorAll('#itemsBody button')).forEach(b=> b.onclick=()=> delItem(b.dataset.id)); }
+
+    // Calculations
+    function calc(){ const direct=state.items.reduce((s,i)=> s+(i.qty*i.unit),0); const oh=(+ohFixedPerUnit.value)+ (direct*(+ohRatePct.value||0)/100); const unitCost=direct+oh; let priceBeforeTax=0; const method=pricingMethod.value; if(method==='costplus'){ priceBeforeTax = unitCost*(1+(+profitMargin.value||0)/100); } else if(method==='targetProfit'){ priceBeforeTax=unitCost+(+targetProfit.value||0); } else if(method==='backFromMarket'){ let mp=+marketPrice.value||0; if(mp>0){ const noVat = mp/(1+(+vat.value||0)/100); priceBeforeTax = noVat/(1-(+discount.value||0)/100); } else priceBeforeTax=unitCost; } const discounted=priceBeforeTax*(1-(+discount.value||0)/100); const finalWithVAT=discounted*(1+(+vat.value||0)/100); const profitPerUnit=Math.max(0, discounted-unitCost); const marginPct = discounted>0 ? (profitPerUnit/discounted)*100 : 0; const fixed=+fixedTotal.value||0; const bevPrice=+breakevenPrice.value||discounted; const varPU=+variablePerUnit.value||unitCost; const cm=Math.max(0.00001, (bevPrice-varPU)); const bevUnits=fixed>0 ? (fixed/cm) : 0; renderKPIs({direct,oh,unitCost,priceBeforeTax,discounted,finalWithVAT,profitPerUnit,marginPct,bevUnits}); }
+    function renderKPIs(o){ const c=currency.value; document.getElementById('kpis').innerHTML =
+      '<div class="kpi"><div class="lbl">التكلفة المباشرة للوحدة</div><div class="val mono">'+fmt(o.direct,c)+'</div></div>' +
+      '<div class="kpi"><div class="lbl">تكاليف غير مباشرة/وحدة</div><div class="val mono">'+fmt(o.oh,c)+'</div></div>' +
+      '<div class="kpi"><div class="lbl">إجمالي تكلفة الوحدة</div><div class="val mono">'+fmt(o.unitCost,c)+'</div></div>' +
+      '<div class="kpi"><div class="lbl">السعر قبل الخصم/الضريبة</div><div class="val mono">'+fmt(o.priceBeforeTax,c)+'</div></div>' +
+      '<div class="kpi"><div class="lbl">السعر بعد الخصم (بدون ضريبة)</div><div class="val mono">'+fmt(o.discounted,c)+'</div></div>' +
+      '<div class="kpi"><div class="lbl">السعر النهائي مع الضريبة</div><div class="val mono">'+fmt(o.finalWithVAT,c)+'</div></div>' +
+      '<div class="kpi"><div class="lbl">الربح/الوحدة</div><div class="val mono" style="color:'+(o.profitPerUnit>=0?'var(--ok)':'var(--warn)')+'">'+fmt(o.profitPerUnit,c)+'</div></div>' +
+      '<div class="kpi"><div class="lbl">هامش الربح %</div><div class="val mono">'+fmt(o.marginPct)+'%</div></div>' +
+      '<div class="kpi"><div class="lbl">نقطة التعادل (عدد الوحدات)</div><div class="val mono">'+fmt(o.bevUnits)+'</div></div>'; }
+
+    document.getElementById('yy').textContent=new Date().getFullYear(); drawItems(); calc(); applyState({...state});
+  </script>
+</body>
+</html>
